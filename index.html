@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeqSim: Ultima ppmSeq</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom transition for smooth actor movement */
+        .actor {
+            transition: all 700ms ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans h-screen flex flex-col">
+
+    <!-- Main Container -->
+    <div class="container mx-auto max-w-5xl p-4 flex-grow flex flex-col">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6">
+            <h1 id="sim-title" class="text-2xl font-bold text-white">SeqSim</h1>
+            <select id="sim-switcher" class="bg-slate-800 border border-slate-700 text-white rounded px-3 py-1">
+                <option value="ppmseq">Ultima ppmSeq</option>
+                <!-- Future simulations can be added here -->
+            </select>
+        </header>
+
+        <!-- Stage -->
+        <div id="stage" class="relative bg-slate-900 rounded-lg shadow-2xl overflow-hidden w-full aspect-video border border-slate-800">
+            <!-- Actors will be injected here -->
+        </div>
+
+        <!-- Footer / Controls -->
+        <footer class="mt-6 bg-slate-900 p-6 rounded-lg border border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-area flex-1">
+                <h3 id="step-label" class="text-blue-400 font-bold text-lg mb-1">Loading...</h3>
+                <p id="step-desc" class="text-slate-400">Please wait.</p>
+            </div>
+            
+            <div class="buttons flex gap-3">
+                <button id="prev" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <i data-lucide="chevron-left" class="inline-block w-4 h-4 mr-1"></i> Prev
+                </button>
+                <button id="next" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    Next <i data-lucide="chevron-right" class="inline-block w-4 h-4 ml-1"></i>
+                </button>
+            </div>
+        </footer>
+        
+        <!-- Progress Bar -->
+        <div class="w-full bg-slate-800 h-1 mt-6 rounded-full overflow-hidden">
+            <div id="progress-bar" class="bg-blue-500 h-full w-0 transition-all duration-500"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. DATA: The "Code-as-Data" Source ---
+        
+        const SIMULATION_DATA = {
+            id: "ppmseq",
+            title: "Ultima ppmSeq",
+            actors: [
+                { id: "dna-ds", icon: "align-justify", color: "text-slate-400", label: "Input DNA" },
+                { id: "bead", icon: "circle-dot", color: "text-purple-500", label: "Bead" },
+                { id: "droplet", icon: "circle", color: "text-blue-500/30", label: "Droplet" }, // Transparent blue
+                { id: "clones", icon: "copy", color: "text-purple-400", label: "Clones" },
+                { id: "wafer", icon: "disc", color: "text-slate-600", label: "Wafer" }
+            ],
+            steps: [
+                {
+                    label: "Emulsion",
+                    text: "A single DNA molecule and a bead are trapped in an emulsion droplet.",
+                    state: {
+                        "dna-ds": { x: 48, y: 48, opacity: 1, scale: 1, rotate: 0 },
+                        "bead": { x: 52, y: 52, opacity: 1, scale: 1.5, rotate: 0 },
+                        "droplet": { x: 50, y: 50, opacity: 1, scale: 5, rotate: 0 },
+                        "clones": { x: 52, y: 52, opacity: 0, scale: 0.5, rotate: 0 },
+                        "wafer": { x: 120, y: 50, opacity: 0, scale: 2, rotate: 0 } // Off-screen right
+                    }
+                },
+                {
+                    label: "Clonal Amp",
+                    text: "Both Watson and Crick strands amplify onto the SAME bead.",
+                    state: {
+                        "dna-ds": { x: 48, y: 48, opacity: 0.5, scale: 1, rotate: 0 }, // Fades slightly
+                        "bead": { x: 50, y: 50, opacity: 1, scale: 1.5, rotate: 0 },
+                        "droplet": { x: 50, y: 50, opacity: 1, scale: 5, rotate: 0 },
+                        "clones": { x: 50, y: 50, opacity: 1, scale: 1.8, rotate: 0 }, // Appears over bead
+                        "wafer": { x: 120, y: 50, opacity: 0, scale: 2, rotate: 0 }
+                    }
+                },
+                {
+                    label: "Wafer Flow",
+                    text: "The bead is loaded onto the open wafer.",
+                    state: {
+                        "dna-ds": { x: 20, y: 50, opacity: 0, scale: 0.5, rotate: 0 }, // Gone
+                        "bead": { x: 50, y: 50, opacity: 1, scale: 1, rotate: 0 },
+                        "droplet": { x: 50, y: 50, opacity: 0, scale: 6, rotate: 0 }, // Pops (fades out and expands)
+                        "clones": { x: 50, y: 50, opacity: 1, scale: 1.2, rotate: 0 },
+                        "wafer": { x: 50, y: 50, opacity: 1, scale: 3, rotate: 0 } // Moves in, big background
+                    }
+                },
+                {
+                    label: "Sequencing",
+                    text: "The sequencer reads both strands simultaneously from one cluster. Errors average out.",
+                    state: {
+                        "dna-ds": { x: 20, y: 50, opacity: 0, scale: 0.5, rotate: 0 },
+                        "bead": { x: 50, y: 50, opacity: 1, scale: 1, rotate: 360 }, // Spins
+                        "droplet": { x: 50, y: 50, opacity: 0, scale: 6, rotate: 0 },
+                        "clones": { x: 50, y: 50, opacity: 1, scale: 1.2, rotate: 360 }, // Spins with bead
+                        "wafer": { x: 50, y: 50, opacity: 1, scale: 3, rotate: 90 } // Spins slowly
+                    }
+                }
+            ]
+        };
+
+        // --- 2. ENGINE: The Logic ---
+
+        let currentStepIndex = 0;
+        const stage = document.getElementById('stage');
+        const titleEl = document.getElementById('sim-title');
+        const stepLabelEl = document.getElementById('step-label');
+        const stepDescEl = document.getElementById('step-desc');
+        const prevBtn = document.getElementById('prev');
+        const nextBtn = document.getElementById('next');
+        const progressBar = document.getElementById('progress-bar');
+
+        function init() {
+            titleEl.textContent = SIMULATION_DATA.title;
+            renderActors();
+            updateState(0);
+            
+            // Initial Icon Render
+            lucide.createIcons();
+        }
+
+        function renderActors() {
+            stage.innerHTML = ''; // Clear stage
+            SIMULATION_DATA.actors.forEach(actor => {
+                const el = document.createElement('div');
+                el.id = `actor-${actor.id}`;
+                el.className = `actor absolute flex flex-col items-center justify-center pointer-events-none`;
+                // Centering fix: translate-x-1/2 translate-y-1/2 so x/y are center points
+                el.style.transform = 'translate(-50%, -50%)'; 
+                
+                // Icon
+                const icon = document.createElement('i');
+                icon.setAttribute('data-lucide', actor.icon);
+                // Add color classes. If it has opacity in color class (like /30), it works with Tailwind
+                el.classList.add(...actor.color.split(' '));
+                
+                // Label (Optional, small below icon)
+                if (actor.label) {
+                    const label = document.createElement('span');
+                    label.textContent = actor.label;
+                    label.className = "text-[10px] mt-1 opacity-80 whitespace-nowrap";
+                    el.appendChild(icon);
+                    el.appendChild(label);
+                } else {
+                    el.appendChild(icon);
+                }
+
+                stage.appendChild(el);
+            });
+        }
+
+        function updateState(index) {
+            const step = SIMULATION_DATA.steps[index];
+            
+            // Update Text
+            stepLabelEl.textContent = `${index + 1}. ${step.label}`;
+            stepDescEl.textContent = step.text;
+
+            // Update Progress Bar
+            const progress = ((index) / (SIMULATION_DATA.steps.length - 1)) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            // Update Buttons
+            prevBtn.disabled = index === 0;
+            nextBtn.disabled = index === SIMULATION_DATA.steps.length - 1;
+
+            // Update Actors
+            SIMULATION_DATA.actors.forEach(actor => {
+                const el = document.getElementById(`actor-${actor.id}`);
+                const actorState = step.state[actor.id] || { opacity: 0, x: 50, y: 50, scale: 1, rotate: 0 };
+
+                // Apply Styles
+                el.style.left = `${actorState.x}%`;
+                el.style.top = `${actorState.y}%`;
+                el.style.opacity = actorState.opacity;
+                
+                // Transform: translate(-50%, -50%) is base, add scale and rotate
+                // Note: We must keep the centering translation
+                el.style.transform = `translate(-50%, -50%) scale(${actorState.scale}) rotate(${actorState.rotate}deg)`;
+                
+                // Icon sizing based on scale is handled by transform, but we can also adjust base size if needed.
+                // For now, standard icon size is fine, scaled by the transform.
+                const icon = el.querySelector('svg');
+                if(icon) {
+                    icon.style.width = '48px'; // Base size
+                    icon.style.height = '48px';
+                }
+            });
+        }
+
+        // --- 3. CONTROLS ---
+
+        nextBtn.addEventListener('click', () => {
+            if (currentStepIndex < SIMULATION_DATA.steps.length - 1) {
+                currentStepIndex++;
+                updateState(currentStepIndex);
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentStepIndex > 0) {
+                currentStepIndex--;
+                updateState(currentStepIndex);
+            }
+        });
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
