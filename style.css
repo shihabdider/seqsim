@@ -1,0 +1,4 @@
+/* Custom transition for smooth actor movement */
+.actor {
+    transition: all 700ms ease-in-out;
+}
