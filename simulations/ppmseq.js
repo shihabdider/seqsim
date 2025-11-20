@@ -1,7 +1,7 @@
 // PPMSeq Simulation Data
-// Assigned to window.SIMULATION_DATA for the engine to pick up.
+// Registered with the engine using registerSimulation().
 
-window.SIMULATION_DATA = {
+window.registerSimulation({
     id: "ppmseq",
     title: "Ultima ppmSeq",
     actors: [
@@ -345,4 +345,5 @@ window.SIMULATION_DATA = {
             }
         }
     ]
-};
+});
+

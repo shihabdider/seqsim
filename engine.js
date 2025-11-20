@@ -1,6 +1,10 @@
 // SeqSim Engine Logic
 
+// Store all loaded simulations
+const SIMULATIONS = {};
+let currentSimulation = null;
 let currentStepIndex = 0;
+
 const stage = document.getElementById('stage');
 const titleEl = document.getElementById('sim-title');
 const stepLabelEl = document.getElementById('step-label');
@@ -8,24 +12,58 @@ const stepDescEl = document.getElementById('step-desc');
 const prevBtn = document.getElementById('prev');
 const nextBtn = document.getElementById('next');
 const progressBar = document.getElementById('progress-bar');
+const simSwitcher = document.getElementById('sim-switcher');
 
-function init() {
-    // Ensure SIMULATION_DATA is available
-    if (typeof window.SIMULATION_DATA === 'undefined') {
-        console.error("SIMULATION_DATA not found. Make sure a simulation file is loaded.");
+function registerSimulation(simData) {
+    SIMULATIONS[simData.id] = simData;
+}
+
+function loadSimulation(simId) {
+    if (!SIMULATIONS[simId]) {
+        console.error(`Simulation "${simId}" not found.`);
         return;
     }
 
-    titleEl.textContent = window.SIMULATION_DATA.title;
+    currentSimulation = SIMULATIONS[simId];
+    currentStepIndex = 0;
+    titleEl.textContent = currentSimulation.title;
     renderActors();
     updateState(0);
+}
 
-    // Iconify automatically watches the DOM, so we don't need an explicit create call like Lucide.
+function init() {
+    // Register all simulations that have been loaded
+    // Each simulation file sets window.SIMULATION_DATA
+    // We need to collect them all
+
+    // Since scripts load sequentially, we can't directly capture each SIMULATION_DATA
+    // Instead, we'll use a different approach: each simulation file should call registerSimulation()
+
+    // For backward compatibility, check if SIMULATION_DATA exists
+    if (typeof window.SIMULATION_DATA !== 'undefined') {
+        console.warn("Legacy SIMULATION_DATA detected. Please update simulation files to use registerSimulation().");
+        registerSimulation(window.SIMULATION_DATA);
+    }
+
+    // Load the first available simulation or the one selected in dropdown
+    const selectedSim = simSwitcher.value;
+    if (SIMULATIONS[selectedSim]) {
+        loadSimulation(selectedSim);
+    } else {
+        // Load first available simulation
+        const firstSimId = Object.keys(SIMULATIONS)[0];
+        if (firstSimId) {
+            simSwitcher.value = firstSimId;
+            loadSimulation(firstSimId);
+        } else {
+            console.error("No simulations loaded.");
+        }
+    }
 }
 
 function renderActors() {
     stage.innerHTML = ''; // Clear stage
-    window.SIMULATION_DATA.actors.forEach(actor => {
+    currentSimulation.actors.forEach(actor => {
         const el = document.createElement('div');
         el.id = `actor-${actor.id}`;
         el.className = `actor absolute flex flex-col items-center justify-center pointer-events-none`;
@@ -59,22 +97,22 @@ function renderActors() {
 }
 
 function updateState(index) {
-    const step = window.SIMULATION_DATA.steps[index];
+    const step = currentSimulation.steps[index];
 
     // Update Text
     stepLabelEl.textContent = `${index + 1}. ${step.label}`;
     stepDescEl.textContent = step.text;
 
     // Update Progress Bar
-    const progress = ((index) / (window.SIMULATION_DATA.steps.length - 1)) * 100;
+    const progress = ((index) / (currentSimulation.steps.length - 1)) * 100;
     progressBar.style.width = `${progress}%`;
 
     // Update Buttons
     prevBtn.disabled = index === 0;
-    nextBtn.disabled = index === window.SIMULATION_DATA.steps.length - 1;
+    nextBtn.disabled = index === currentSimulation.steps.length - 1;
 
     // Update Actors
-    window.SIMULATION_DATA.actors.forEach(actor => {
+    currentSimulation.actors.forEach(actor => {
         const el = document.getElementById(`actor-${actor.id}`);
         const actorState = step.state[actor.id] || { opacity: 0, x: 50, y: 50, scale: 1, rotate: 0 };
 
@@ -92,7 +130,7 @@ function updateState(index) {
 // --- CONTROLS ---
 
 nextBtn.addEventListener('click', () => {
-    if (currentStepIndex < window.SIMULATION_DATA.steps.length - 1) {
+    if (currentStepIndex < currentSimulation.steps.length - 1) {
         currentStepIndex++;
         updateState(currentStepIndex);
     }
@@ -105,5 +143,19 @@ prevBtn.addEventListener('click', () => {
     }
 });
 
-// Start
-document.addEventListener('DOMContentLoaded', init);
+// Simulation Switcher
+simSwitcher.addEventListener('change', (e) => {
+    loadSimulation(e.target.value);
+});
+
+// Expose registerSimulation globally so simulation files can use it
+window.registerSimulation = registerSimulation;
+
+// Start - use window.onload to ensure all scripts have executed
+// This is important because simulation scripts need to call registerSimulation() before init()
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    // DOM already loaded, call init immediately
+    init();
+}

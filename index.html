@@ -20,7 +20,7 @@
             <h1 id="sim-title" class="text-2xl font-bold text-white">SeqSim</h1>
             <select id="sim-switcher" class="bg-slate-800 border border-slate-700 text-white rounded px-3 py-1">
                 <option value="ppmseq">Ultima ppmSeq</option>
-                <!-- Future simulations can be added here -->
+                <option value="nanoseq">NanoSeq</option>
             </select>
         </header>
 
@@ -57,11 +57,12 @@
 
     </div>
 
-    <!-- Simulation Data (Load First) -->
-    <script src="simulations/ppmseq.js"></script>
-
-    <!-- Engine Logic (Load Second) -->
+    <!-- Engine Logic (Load First to define registerSimulation) -->
     <script src="engine.js"></script>
+
+    <!-- Simulation Data (Load Second to register simulations) -->
+    <script src="simulations/ppmseq.js"></script>
+    <script src="simulations/nanoseq.js"></script>
 
 </body>
 
